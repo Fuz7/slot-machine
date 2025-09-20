@@ -16,8 +16,8 @@ The core mechanic is reaching a **goal** within a set number of rolls. Each time
 ## 🚀 How to Run
 ```bash
 # Clone repo
-git clone https://github.com/your-username/slot-machine-rust.git
-cd slot-machine-rust
+git clone https://github.com/Fuz7/slot-machine.git
+cd slot-machine
 
 # Run with Cargo
 cargo run
