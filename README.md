@@ -31,7 +31,7 @@ cargo run
 
 - Goal scaling after each success
 
-- Basic terminal output\
+- Basic terminal output
 
 ---
 ## 🏗️ Planned / Potential Features
