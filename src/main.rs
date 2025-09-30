@@ -1,12 +1,33 @@
 mod util;
 mod entities;
 mod core;
+mod ui;
 
-use entities::slot_machine::{Symbol, Reel, SlotMachine, LineType};
-use core::scoring::*;
-
+use bevy::prelude::*;
+use entities::slot_machine::{Symbol, Reel, SlotMachine};
+use ui::slot_ui::GameState;
+use ui::game_ui::GameUIPlugin;
+use ui::assets::AssetsPlugin;
 
 fn main() {
+    App::new()
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "Slot Machine Game".into(),
+                resolution: (800.0, 900.0).into(),
+                resizable: false,
+                ..default()
+            }),
+            ..default()
+        }))
+        .add_plugins(AssetsPlugin) // Load assets first
+        .add_plugins(GameUIPlugin)
+        .add_systems(Update, ui::slot_animation::update_slot_animation)
+        .add_systems(Startup, setup_game)
+        .run();
+}
+
+fn setup_game(mut commands: Commands) {
     let symbols = vec![
         Symbol::new("🍒", "Cherry", 2.0, 0.0, 50.0),
         Symbol::new("🍋", "Lemon", 3.0, 0.0, 30.0),
@@ -21,37 +42,19 @@ fn main() {
         Reel::new(symbols.clone()),
     ]);
 
-    // temp pool and bet
-    let mut pool: f32 = 100.0; 
-    let bet: f32 = 5.0;
+    // Insert slot machine as separate resource for animation system
+    commands.insert_resource(slot_machine.clone());
 
-    let grid = slot_machine.spin_grid(3);
+    let game_state = GameState {
+        slot_machine,
+        player_pool: 100.0,
+        current_bet: 5.0,
+        last_grid: None,
+        last_wins: Vec::new(),
+        is_spinning: false,
+        last_win_amount: 0.0,
+        has_recent_win: false,
+    };
 
-    println!("Slot Result:");
-    for row in &grid {
-        for symbol in row {
-            print!("{} ", symbol.icon);
-        }
-        println!();
-    }
-
-    let wins = slot_machine.check_wins(&grid);
-
-    if wins.is_empty() {
-        println!("No winning lines 😢");
-    } else {
-        println!("🎉 Winning lines and payouts:");
-        for win in &wins {
-            let icons: Vec<&str> = win.symbols.iter().map(|s| s.icon).collect();
-            let payout = line_payout(win, bet);
-            match win.line_type {
-                LineType::Horizontal(row) => println!("Horizontal row {}: {:?} → payout: {}", row, icons, payout),
-                LineType::Vertical(col) => println!("Vertical col {}: {:?} → payout: {}", col, icons, payout),
-                LineType::Diagonal(di) => println!("Diagonal {}: {:?} → payout: {}", di, icons, payout),
-            }
-        }
-        update_pool(&mut pool, &wins, bet);
-    }
-
-    println!("Player's pool after spin: {}", pool);
+    commands.insert_resource(game_state);
 }

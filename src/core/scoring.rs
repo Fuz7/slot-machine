@@ -1,4 +1,4 @@
-use crate::entities::slot_machine::{WinningLine, LineType, Symbol};
+use crate::entities::slot_machine::{WinningLine, Symbol};
 
 pub fn line_payout(line: &WinningLine, bet: f32) -> f32 {
     let s: &Symbol = line.symbols[0];

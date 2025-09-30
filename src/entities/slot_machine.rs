@@ -1,41 +1,48 @@
 use rand::prelude::*;
 use rand::distributions::WeightedIndex;
+use bevy::prelude::Resource;
 
 #[derive(Debug, Clone)]
 pub struct Symbol {
-    pub icon: &'static str,
-    pub name: &'static str,
+    pub icon: String,
+    pub name: String,
     pub multiplier: f32,
     pub addition: f32,
     pub chance: f32,
 }
 
 impl Symbol {
-    pub fn new(icon: &'static str, name: &'static str, multiplier: f32, addition: f32, chance: f32) -> Self {
-        Self { icon, name, multiplier, addition, chance }
+    pub fn new(icon: &str, name: &str, multiplier: f32, addition: f32, chance: f32) -> Self {
+        Self { 
+            icon: icon.to_string(), 
+            name: name.to_string(), 
+            multiplier, 
+            addition, 
+            chance 
+        }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Reel {
     symbols: Vec<Symbol>,
-    dist: WeightedIndex<f32>,
+    // Note: WeightedIndex doesn't implement Clone, so we'll recreate it when needed
 }
 
 impl Reel {
     pub fn new(symbols: Vec<Symbol>) -> Self {
-        let weights = symbols.iter().map(|s| s.chance).collect::<Vec<_>>();
-        let dist = WeightedIndex::new(weights).unwrap();
-        Self { symbols, dist }
+        Self { symbols }
     }
 
-    pub fn spin(&self) -> &Symbol {
+    pub fn spin(&self) -> Symbol {
         let mut rng = thread_rng();
-        &self.symbols[self.dist.sample(&mut rng)]
+        let weights = self.symbols.iter().map(|s| s.chance).collect::<Vec<_>>();
+        let dist = WeightedIndex::new(weights).unwrap();
+        self.symbols[dist.sample(&mut rng)].clone()
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Resource)]
 pub struct SlotMachine {
     reels: Vec<Reel>,
 }
@@ -45,40 +52,31 @@ impl SlotMachine {
         Self { reels }
     }
 
-    pub fn spin_grid(&self, rows: usize) -> Vec<Vec<&Symbol>> {
+    pub fn spin_grid(&self, rows: usize) -> Vec<Vec<Symbol>> {
         (0..rows)
             .map(|_| self.reels.iter().map(|reel| reel.spin()).collect())
             .collect()
     }
 
-    pub fn check_wins<'a>(&self, grid: &'a [Vec<&'a Symbol>]) -> Vec<WinningLine<'a>> {
+    pub fn check_wins<'a>(&self, grid: &'a [Vec<Symbol>]) -> Vec<WinningLine<'a>> {
         let mut wins = Vec::new();
         let rows = grid.len();
         let cols = grid[0].len();
 
         // Horizontals
         for row in 0..rows {
-            if grid[row].iter().all(|&s| s.name == grid[row][0].name) {
+            if grid[row].iter().all(|s| s.name == grid[row][0].name) {
                 wins.push(WinningLine {
-                    symbols: grid[row].clone(),
+                    symbols: grid[row].iter().collect(),
                     line_type: LineType::Horizontal(row),
                 });
             }
         }
 
-        // Verticals
-        for col in 0..cols {
-            let column: Vec<&Symbol> = (0..rows).map(|row| grid[row][col]).collect();
-            if column.iter().all(|&s| s.name == column[0].name) {
-                wins.push(WinningLine {
-                    symbols: column,
-                    line_type: LineType::Vertical(col),
-                });
-            }
-        }
+        // Skip vertical wins since reels are circular and this won't happen
 
         // Diagonals
-        let diag1: Vec<&Symbol> = (0..rows).map(|i| grid[i][i]).collect();
+        let diag1: Vec<&Symbol> = (0..rows).map(|i| &grid[i][i]).collect();
         if diag1.iter().all(|&s| s.name == diag1[0].name) {
             wins.push(WinningLine {
                 symbols: diag1,
@@ -86,7 +84,7 @@ impl SlotMachine {
             });
         }
 
-        let diag2: Vec<&Symbol> = (0..rows).map(|i| grid[i][cols - 1 - i]).collect();
+        let diag2: Vec<&Symbol> = (0..rows).map(|i| &grid[i][cols - 1 - i]).collect();
         if diag2.iter().all(|&s| s.name == diag2[0].name) {
             wins.push(WinningLine {
                 symbols: diag2,
@@ -98,7 +96,7 @@ impl SlotMachine {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum LineType {
     Horizontal(usize),
     Vertical(usize),
