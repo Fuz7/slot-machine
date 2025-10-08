@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy::core_pipeline::bloom::{BloomSettings, BloomCompositeMode};
 use crate::entities::slot_machine::{Symbol, SlotMachine};
 use crate::ui::assets::{SymbolAssets, get_symbol_texture};
 use crate::ui::slot_animation::{SlotAnimationState, start_slot_animation};
@@ -57,9 +58,58 @@ pub struct SpinAnimation {
     pub target_symbol: Symbol,
 }
 
+#[derive(Component)]
+pub struct WinningCell {
+    pub timer: Timer,
+    pub bloom_phase: BloomPhase,
+    pub line_index: usize,
+    pub cell_index: usize,
+}
+
+#[derive(Component)]
+pub struct BloomOverlay;
+
+#[derive(Clone, PartialEq)]
+pub enum BloomPhase {
+    WaitingToStart,
+    SequentialBloom,
+    RapidFlashing,
+    Finished,
+}
+
+#[derive(Resource)]
+pub struct WinBloomState {
+    pub is_active: bool,
+    pub current_line: usize,
+    pub current_cell: usize,
+    pub flash_timer: Timer,
+    pub flash_count: u32,
+    pub max_flashes: u32,
+}
+
 pub fn setup_ui(mut commands: Commands) {
-    // Camera
-    commands.spawn(Camera2dBundle::default());
+    // Camera with enhanced bloom settings for visible effects
+    commands.spawn((
+        Camera2dBundle::default(),
+        BloomSettings {
+            intensity: 0.5,
+            low_frequency_boost: 0.8,
+            low_frequency_boost_curvature: 0.95,
+            high_pass_frequency: 1.0,
+            prefilter_settings: Default::default(),
+            composite_mode: BloomCompositeMode::Additive,
+        },
+    ));
+
+    // Initialize win bloom state
+    commands.insert_resource(WinBloomState {
+        is_active: false,
+        current_line: 0,
+        current_cell: 0,
+        flash_timer: Timer::from_seconds(0.1, TimerMode::Repeating),
+        flash_count: 0,
+        max_flashes: 6,
+    });
 
     // Root UI container
     commands
@@ -784,5 +834,181 @@ pub fn process_spin_results(
                 println!("❌ No wins this time. Pool remains: ${:.2}", game_state.player_pool);
             }
         }
+    }
+}
+
+pub fn start_win_bloom_animation(
+    mut commands: Commands,
+    mut bloom_state: ResMut<WinBloomState>,
+    game_state: Res<GameState>,
+    cell_query: Query<(Entity, &SlotCell), With<SlotCell>>,
+) {
+    // Only start if we have wins and bloom isn't already active
+    if !game_state.last_wins.is_empty() && !bloom_state.is_active {
+        bloom_state.is_active = true;
+        bloom_state.current_line = 0;
+        bloom_state.current_cell = 0;
+        bloom_state.flash_count = 0;
+        
+        println!("🌟 Starting win bloom animation for {} lines!", game_state.last_wins.len());
+        
+        // Add WinningCell components to the winning cells
+        for (line_index, win_line) in game_state.last_wins.iter().enumerate() {
+            // For horizontal lines, the positions are predictable
+            match win_line.line_type {
+                crate::entities::slot_machine::LineType::Horizontal(row) => {
+                    for col in 0..3 {
+                        for (entity, cell) in &cell_query {
+                            if cell.row == row && cell.col == col {
+                                commands.entity(entity).insert(WinningCell {
+                                    timer: Timer::from_seconds(0.3, TimerMode::Once),
+                                    bloom_phase: BloomPhase::WaitingToStart,
+                                    line_index,
+                                    cell_index: col,
+                                });
+                            }
+                        }
+                    }
+                }
+                crate::entities::slot_machine::LineType::Diagonal(diag_type) => {
+                    let positions = if diag_type == 0 {
+                        vec![(0, 0), (1, 1), (2, 2)] // Top-left to bottom-right
+                    } else {
+                        vec![(0, 2), (1, 1), (2, 0)] // Top-right to bottom-left
+                    };
+                    
+                    for (cell_index, (row, col)) in positions.iter().enumerate() {
+                        for (entity, cell) in &cell_query {
+                            if cell.row == *row && cell.col == *col {
+                                commands.entity(entity).insert(WinningCell {
+                                    timer: Timer::from_seconds(0.3, TimerMode::Once),
+                                    bloom_phase: BloomPhase::WaitingToStart,
+                                    line_index,
+                                    cell_index,
+                                });
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+pub fn update_win_bloom_animation(
+    time: Res<Time>,
+    mut bloom_state: ResMut<WinBloomState>,
+    game_state: Res<GameState>,
+    mut winning_cells: Query<(Entity, &mut WinningCell), With<WinningCell>>,
+    mut overlay_query: Query<&mut BackgroundColor, With<BloomOverlay>>,
+    cell_children: Query<&Children>,
+    mut commands: Commands,
+) {
+    if !bloom_state.is_active {
+        return;
+    }
+    
+    bloom_state.flash_timer.tick(time.delta());
+    
+    // Update winning cell timers and phases
+    for (entity, mut winning_cell) in &mut winning_cells {
+        winning_cell.timer.tick(time.delta());
+        
+        match winning_cell.bloom_phase {
+            BloomPhase::WaitingToStart => {
+                // Check if it's this cell's turn to start blooming
+                if winning_cell.line_index == bloom_state.current_line 
+                    && winning_cell.cell_index == bloom_state.current_cell {
+                    winning_cell.bloom_phase = BloomPhase::SequentialBloom;
+                    winning_cell.timer.reset();
+                    
+                    // Create a bright glowing overlay sprite
+                    let overlay = commands.spawn((
+                        NodeBundle {
+                            style: Style {
+                                position_type: PositionType::Absolute,
+                                width: Val::Percent(100.0),
+                                height: Val::Percent(100.0),
+                                ..default()
+                            },
+                            background_color: Color::srgba(1.0, 0.8, 0.0, 0.8).into(), // Bright yellow with transparency
+                            z_index: ZIndex::Local(10),
+                            ..default()
+                        },
+                        BloomOverlay,
+                    )).id();
+                    
+                    // Add the overlay as a child of the cell
+                    commands.entity(entity).add_child(overlay);
+                    
+                    println!("🌟 Cell ({}, {}) starting bloom!", winning_cell.cell_index, winning_cell.line_index);
+                    
+                    // Move to next cell
+                    bloom_state.current_cell += 1;
+                    if bloom_state.current_cell >= 3 {
+                        bloom_state.current_cell = 0;
+                        bloom_state.current_line += 1;
+                    }
+                }
+            }
+            BloomPhase::SequentialBloom => {
+                if winning_cell.timer.finished() {
+                    winning_cell.bloom_phase = BloomPhase::RapidFlashing;
+                    winning_cell.timer = Timer::from_seconds(0.1, TimerMode::Repeating);
+                }
+            }
+            BloomPhase::RapidFlashing => {
+                // Flash the overlay on and off rapidly
+                if bloom_state.flash_timer.just_finished() {
+                    bloom_state.flash_count += 1;
+                    let is_bright = (bloom_state.flash_count % 2) == 1;
+                    
+                    // Find and update the overlay for this cell
+                    if let Ok(children) = cell_children.get(entity) {
+                        for &child in children.iter() {
+                            if let Ok(mut overlay_color) = overlay_query.get_mut(child) {
+                                if is_bright {
+                                    *overlay_color = Color::srgba(1.0, 0.8, 0.0, 0.9).into(); // Bright and visible
+                                } else {
+                                    *overlay_color = Color::srgba(1.0, 0.8, 0.0, 0.2).into(); // Dim
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Check if we've finished flashing
+                    if bloom_state.flash_count >= bloom_state.max_flashes {
+                        winning_cell.bloom_phase = BloomPhase::Finished;
+                    }
+                }
+            }
+            BloomPhase::Finished => {
+                // This cell is done
+            }
+        }
+    }
+    
+    // Check if all animations are complete
+    let all_finished = winning_cells.iter().all(|(_, cell)| cell.bloom_phase == BloomPhase::Finished);
+    
+    if all_finished && bloom_state.current_line >= game_state.last_wins.len() {
+        // Clean up
+        bloom_state.is_active = false;
+        
+        // Remove WinningCell components and overlay sprites
+        for (entity, _) in &mut winning_cells {
+            // Remove overlay children first
+            if let Ok(children) = cell_children.get(entity) {
+                for &child in children.iter() {
+                    if overlay_query.get(child).is_ok() {
+                        commands.entity(child).despawn();
+                    }
+                }
+            }
+            commands.entity(entity).remove::<WinningCell>();
+        }
+        
+        println!("🌟 Win bloom animation completed!");
     }
 }
