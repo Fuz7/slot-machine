@@ -516,102 +516,59 @@ pub fn update_slot_display_animation(
     animation_state: Res<SlotAnimationState>,
     symbol_assets: Option<Res<SymbolAssets>>,
 ) {
-    if !animation_state.is_animating {
-        return;
-    }
-    
+    // Handle both spinning AND stopped reels using the same logic for consistent alignment
     for (children, cell, mut bg_color) in &mut cell_query {
         let column_index = cell.col;
         
         // Get the column animation data from SlotAnimationState
         if let Some(column) = animation_state.columns.get(column_index) {
-            if column.is_spinning {
-                // Calculate which symbols should be visible during animation
-                let visible_symbols = crate::ui::slot_animation::get_visible_symbols_for_column(
-                    column, 
-                    3
-                );
+            // Always use get_visible_symbols_for_column for consistent alignment
+            let visible_symbols = crate::ui::slot_animation::get_visible_symbols_for_column(
+                column, 
+                3
+            );
+            
+            if let Some(symbol) = visible_symbols.get(cell.row) {
+                // Update the display
+                let mut image_child = None;
+                let mut text_child = None;
                 
-                if let Some(symbol) = visible_symbols.get(cell.row) {
-                    // Update the display
-                    let mut image_child = None;
-                    let mut text_child = None;
-                    
-                    for &child in children.iter() {
-                        if image_query.get_mut(child).is_ok() {
-                            image_child = Some(child);
-                        } else if text_query.get_mut(child).is_ok() {
-                            text_child = Some(child);
-                        }
+                for &child in children.iter() {
+                    if image_query.get_mut(child).is_ok() {
+                        image_child = Some(child);
+                    } else if text_query.get_mut(child).is_ok() {
+                        text_child = Some(child);
                     }
-                    
-                    // Try to use image assets first, fall back to emoji
-                    let mut used_image = false;
-                    if let (Some(assets), Some(image_entity)) = (&symbol_assets, image_child) {
-                        if let Some(texture) = get_symbol_texture(assets, &symbol.name) {
-                            if let Ok((mut image, mut visibility)) = image_query.get_mut(image_entity) {
-                                image.texture = texture;
-                                *visibility = Visibility::Visible;
-                                used_image = true;
-                            }
-                        }
-                    }
-                    
-                    // Update text
-                    if let Some(text_entity) = text_child {
-                        if let Ok(mut text) = text_query.get_mut(text_entity) {
-                            if used_image {
-                                text.sections[0].value = "".to_string();
-                            } else {
-                                text.sections[0].value = symbol.icon.clone();
-                            }
-                        }
-                    }
-                    
-                    // Spinning effect - slight blur or different background
-                    *bg_color = Color::srgb(0.85, 0.85, 0.95).into(); // Light blue tint while spinning
                 }
-            } else if !column.is_spinning && *animation_state.completed_reels.get(column_index).unwrap_or(&false) {
-                // Column has stopped, show final result from the reel
-                let visible_symbols = crate::ui::slot_animation::get_visible_symbols_for_column(
-                    column, 
-                    3
-                );
                 
-                if let Some(symbol) = visible_symbols.get(cell.row) {
-                    let mut image_child = None;
-                    let mut text_child = None;
-                    
-                    for &child in children.iter() {
-                        if image_query.get_mut(child).is_ok() {
-                            image_child = Some(child);
-                        } else if text_query.get_mut(child).is_ok() {
-                            text_child = Some(child);
+                // Try to use image assets first, fall back to emoji
+                let mut used_image = false;
+                if let (Some(assets), Some(image_entity)) = (&symbol_assets, image_child) {
+                    if let Some(texture) = get_symbol_texture(assets, &symbol.name) {
+                        if let Ok((mut image, mut visibility)) = image_query.get_mut(image_entity) {
+                            image.texture = texture;
+                            *visibility = Visibility::Visible;
+                            used_image = true;
                         }
                     }
-                    
-                    let mut used_image = false;
-                    if let (Some(assets), Some(image_entity)) = (&symbol_assets, image_child) {
-                        if let Some(texture) = get_symbol_texture(assets, &symbol.name) {
-                            if let Ok((mut image, mut visibility)) = image_query.get_mut(image_entity) {
-                                image.texture = texture;
-                                *visibility = Visibility::Visible;
-                                used_image = true;
-                            }
+                }
+                
+                // Update text
+                if let Some(text_entity) = text_child {
+                    if let Ok(mut text) = text_query.get_mut(text_entity) {
+                        if used_image {
+                            text.sections[0].value = "".to_string();
+                        } else {
+                            text.sections[0].value = symbol.icon.clone();
                         }
                     }
-                    
-                    if let Some(text_entity) = text_child {
-                        if let Ok(mut text) = text_query.get_mut(text_entity) {
-                            if used_image {
-                                text.sections[0].value = "".to_string();
-                            } else {
-                                text.sections[0].value = symbol.icon.clone();
-                            }
-                        }
-                    }
-                    
-                    *bg_color = Color::WHITE.into();
+                }
+                
+                // Set background color based on spinning state
+                if column.is_spinning {
+                    *bg_color = Color::srgb(0.85, 0.85, 0.95).into(); // Light blue tint while spinning
+                } else {
+                    *bg_color = Color::WHITE.into(); // Normal color when stopped
                 }
             }
         }

@@ -290,8 +290,8 @@ pub fn update_slot_animation(
             animation_state.completed_reels[current_reel] = true;
             
             // Get the symbols that are now visible (should match our target)
-            let visible_symbols = if let Some(column) = animation_state.columns.get(current_reel) {
-                get_visible_symbols_for_column(column, 3)
+            let visible_symbols = if let Some(target_column) = target_results.get(current_reel) {
+                target_column.clone() // Use the exact target symbols instead of calculating from reel
             } else {
                 Vec::new()
             };
@@ -404,6 +404,11 @@ pub fn get_visible_symbols_for_column(
     column: &SlotColumn,
     visible_count: usize,
 ) -> Vec<Symbol> {
+    // If the reel is not spinning and offset is exactly 0.0, just take the first symbols
+    if !column.is_spinning && column.current_offset == 0.0 {
+        return column.reel_symbols.iter().take(visible_count).cloned().collect();
+    }
+    
     // For a truly circular reel, we calculate which symbols are visible based on offset
     let offset_in_symbols = ((column.current_offset / column.symbol_height) as usize) % column.reel_symbols.len();
     let mut visible_symbols = Vec::new();
@@ -422,52 +427,19 @@ fn position_reel_to_show_symbols(column: &mut SlotColumn, target_symbols: &[Symb
         return;
     }
     
-    // Find the best position in the existing circular reel to show our target symbols
-    let mut best_offset = 0.0;
-    let mut best_match_count = 0;
-    
-    // Search through the circular reel to find where our target symbols appear
-    for start_pos in 0..column.reel_symbols.len() {
-        let mut match_count = 0;
-        
-        // Check how many target symbols match at this position
-        for (i, target_symbol) in target_symbols.iter().enumerate() {
-            if i >= 3 { break; } // Only check first 3 visible symbols
-            let reel_index = (start_pos + i) % column.reel_symbols.len();
-            if column.reel_symbols[reel_index].name == target_symbol.name {
-                match_count += 1;
-            }
-        }
-        
-        // If this position has more matches, use it
-        if match_count > best_match_count {
-            best_match_count = match_count;
-            best_offset = start_pos as f32 * column.symbol_height;
-        }
-        
-        // If we found a perfect match, no need to continue
-        if match_count == target_symbols.len().min(3) {
-            break;
+    // Simply replace the first 3 symbols in the reel with our target symbols
+    // This ensures we can always find them at position 0
+    for (i, symbol) in target_symbols.iter().enumerate().take(3) {
+        if i < column.reel_symbols.len() {
+            column.reel_symbols[i] = symbol.clone();
         }
     }
     
-    // If we didn't find a good match, modify the reel to include our symbols
-    if best_match_count < target_symbols.len().min(3) {
-        // Insert our target symbols at a random position in the circular reel
-        let mut rng = rand::thread_rng();
-        let insert_pos = rng.gen_range(0..column.reel_symbols.len().saturating_sub(3));
-        for (i, symbol) in target_symbols.iter().enumerate().take(3) {
-            if insert_pos + i < column.reel_symbols.len() {
-                column.reel_symbols[insert_pos + i] = symbol.clone();
-            }
-        }
-        best_offset = insert_pos as f32 * column.symbol_height;
-    }
+    // Set the offset to 0 to show these symbols at the top
+    // This ensures perfect alignment with the cell boundaries
+    column.current_offset = 0.0;
+    column.target_offset = 0.0;
     
-    // Set the reel position to show our target symbols
-    column.current_offset = best_offset;
-    column.target_offset = best_offset;
-    
-    println!("Positioned reel to show target symbols at offset {}. Target symbols: {:?}", 
-        best_offset, target_symbols.iter().take(3).map(|s| &s.name).collect::<Vec<_>>());
+    println!("Positioned reel to show target symbols at offset 0.0. Target symbols: {:?}", 
+        target_symbols.iter().take(3).map(|s| &s.name).collect::<Vec<_>>());
 }

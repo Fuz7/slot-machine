@@ -72,7 +72,7 @@ pub fn handle_bet_input(
                 let number_part = &new_text[1..];
                 if !number_part.is_empty() {
                     if let Ok(bet_amount) = number_part.parse::<f32>() {
-                        let clamped_bet = bet_amount.clamp(1.0, 100.0);
+                        let clamped_bet = bet_amount.clamp(1.0, game_state.player_pool);
                         if clamped_bet != game_state.current_bet {
                             println!("🎯 Bet updated from backspace: ${:.2} -> ${:.2}", game_state.current_bet, clamped_bet);
                             game_state.current_bet = clamped_bet;
@@ -110,7 +110,7 @@ pub fn handle_bet_input(
                     let new_number_part = &new_text[1..];
                     if !new_number_part.is_empty() {
                         if let Ok(bet_amount) = new_number_part.parse::<f32>() {
-                            let clamped_bet = bet_amount.clamp(1.0, 100.0);
+                            let clamped_bet = bet_amount.clamp(1.0, game_state.player_pool);
                             if clamped_bet != game_state.current_bet {
                                 println!("🎯 Bet updated from typing: ${:.2} -> ${:.2}", game_state.current_bet, clamped_bet);
                                 game_state.current_bet = clamped_bet;
@@ -133,8 +133,8 @@ pub fn handle_bet_input(
             
             if !number_part.is_empty() {
                 if let Ok(bet_amount) = number_part.parse::<f32>() {
-                    // Clamp bet amount to valid range
-                    game_state.current_bet = bet_amount.clamp(1.0, 100.0);
+                    // Clamp bet amount to valid range (min $1, max = player's balance)
+                    game_state.current_bet = bet_amount.clamp(1.0, game_state.player_pool);
                     // Update display to show the clamped value
                     text.sections[0].value = format!("${:.2}", game_state.current_bet);
                 } else {
@@ -161,21 +161,23 @@ pub fn handle_bet_controls(
             Interaction::Pressed => {
                 if !game_state.is_spinning {
                     if bet_up.is_some() {
-                        // Increase bet by $1, max $100
-                        game_state.current_bet = (game_state.current_bet + 1.0).min(100.0);
+                        // Increase bet by $1, max = player's balance
+                        game_state.current_bet = (game_state.current_bet + 1.0).min(game_state.player_pool);
                         *color = Color::srgb(0.2, 0.8, 0.2).into();
+                        println!("🔼 Bet increased to: ${:.2}", game_state.current_bet);
                     } else if bet_down.is_some() {
                         // Decrease bet by $1, min $1
                         game_state.current_bet = (game_state.current_bet - 1.0).max(1.0);
                         *color = Color::srgb(0.8, 0.2, 0.2).into();
+                        println!("🔽 Bet decreased to: ${:.2}", game_state.current_bet);
                     }
                     
-                    // Update input field to reflect the new bet amount (only if not being edited)
+                    // Always update input field when buttons are pressed
                     if let Ok((mut text, mut input_field)) = input_query.get_single_mut() {
-                        if !input_field.is_editing {
-                            text.sections[0].value = format!("${:.2}", game_state.current_bet);
-                            input_field.has_focus = false;
-                        }
+                        text.sections[0].value = format!("${:.2}", game_state.current_bet);
+                        input_field.has_focus = false; // Remove focus when button is pressed
+                        input_field.is_editing = false; // Stop editing mode
+                        println!("📝 Updated input field display to: ${:.2}", game_state.current_bet);
                     }
                 }
             }

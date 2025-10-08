@@ -9,8 +9,7 @@ impl Plugin for GameUIPlugin {
            .add_systems(Startup, crate::ui::slot_ui::setup_ui)
                        .add_systems(Update, (
                 crate::ui::slot_ui::handle_spin_button,
-                crate::ui::slot_ui::update_slot_display_animation,
-                crate::ui::slot_ui::update_slot_display_final,
+                crate::ui::slot_ui::update_slot_display_animation, // Handles both spinning and stopped reels
                 crate::ui::slot_ui::update_displays,
                 crate::ui::slot_ui::update_spin_button_text,
                 crate::ui::slot_ui::process_spin_results,
