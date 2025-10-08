@@ -378,9 +378,7 @@ pub fn setup_ui(mut commands: Commands) {
                                         
                                         parent.spawn(TextBundle {
                                             style: Style {
-                                                align_self: AlignSelf::Center,
-                                                justify_self: JustifySelf::Center,
-                                                margin: UiRect::all(Val::Auto),
+                                                padding: UiRect::right(Val::Px(65.0)),
                                                 ..default()
                                             },
                                             text: Text::from_section(
@@ -512,6 +510,7 @@ pub fn handle_spin_button(
 pub fn update_slot_display_animation(
     mut cell_query: Query<(&Children, &SlotCell, &mut BackgroundColor)>,
     mut text_query: Query<&mut Text, Without<SlotCellImage>>,
+    mut style_query: Query<&mut Style>,
     mut image_query: Query<(&mut UiImage, &mut Visibility), (With<SlotCellImage>, Without<Text>)>,
     animation_state: Res<SlotAnimationState>,
     symbol_assets: Option<Res<SymbolAssets>>,
@@ -561,6 +560,11 @@ pub fn update_slot_display_animation(
                         } else {
                             text.sections[0].value = symbol.icon.clone();
                         }
+                    }
+                    
+                    // Reset padding when animation starts (remove question mark padding)
+                    if let Ok(mut style) = style_query.get_mut(text_entity) {
+                        style.padding = UiRect::all(Val::Px(0.0));
                     }
                 }
                 
