@@ -21,6 +21,7 @@ pub struct UIAssets {
     pub button_pressed: Handle<Image>,
     pub slot_frame: Handle<Image>,
     pub background: Handle<Image>,
+    pub coin: Handle<Image>,
 }
 
 /// Resource containing sound effects
@@ -83,6 +84,7 @@ fn load_assets(
         button_pressed: asset_server.load("textures/ui/button_pressed.png"),
         slot_frame: asset_server.load("textures/ui/slot_frame.png"),
         background: asset_server.load("textures/ui/background.png"),
+        coin: asset_server.load("textures/ui/coin.png"),
     };
 
     // Load sound effects

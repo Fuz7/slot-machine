@@ -201,6 +201,8 @@ pub fn update_slot_animation(
     mut game_state: ResMut<GameState>,
     slot_machine: Option<Res<SlotMachine>>,
     target_results: Option<Res<TargetResults>>,
+    mut commands: Commands,
+    mut popup_state: ResMut<crate::ui::slot_ui::WinPopupState>,
 ) {
     if !animation_state.is_animating {
         return;
@@ -386,6 +388,13 @@ pub fn update_slot_animation(
                     println!("🎉 Pool before win: ${:.2}", game_state.player_pool);
                     game_state.player_pool += total_win;
                     println!("🎉 Pool after win: ${:.2}", game_state.player_pool);
+                    
+                    // Calculate multiplier for display
+                    let multiplier = total_win / game_state.current_bet;
+                    
+                    // Store pending win popup to show after bloom animation completes
+                    println!("🎯 Storing pending win popup! Amount: ${:.2}, Multiplier: {:.1}x", total_win, multiplier);
+                    popup_state.pending_win = Some((total_win, multiplier));
                     
                     // Store the win amount and mark as recent win
                     game_state.last_win_amount = total_win;

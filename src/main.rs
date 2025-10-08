@@ -15,6 +15,7 @@ fn main() {
             primary_window: Some(Window {
                 title: "Slot Machine Game".into(),
                 resolution: (800.0, 900.0).into(),
+                position: WindowPosition::Centered(MonitorSelection::Current),
                 resizable: false,
                 ..default()
             }),

@@ -15,6 +15,9 @@ impl Plugin for GameUIPlugin {
                 crate::ui::slot_ui::process_spin_results,
                 crate::ui::slot_ui::start_win_bloom_animation,
                 crate::ui::slot_ui::update_win_bloom_animation,
+                crate::ui::slot_ui::show_win_popup,
+                crate::ui::slot_ui::animate_coin_flood,
+                crate::ui::slot_ui::update_win_popup,
                 crate::ui::bet_controls::handle_bet_controls,
                 crate::ui::bet_controls::handle_bet_input,
             ));
